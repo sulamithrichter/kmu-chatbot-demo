@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Soll &amp; Haben Treuhand Basel – Chat</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="chat-container">
+
+    <header class="chat-header">
+      <h1>Soll &amp; Haben Treuhand Basel</h1>
+      <p class="tagline">Sie führen Ihr Geschäft, wir führen Ihre Zahlen.</p>
+    </header>
+
+    <!-- Nachrichtenbereich. Wird von chat.js befüllt. -->
+    <main id="messages" class="messages" aria-live="polite">
+      <div class="message bot">
+        <div class="bubble">
+          Grüezi! Ich beantworte Fragen zu unseren Dienstleistungen, Preisen,
+          Öffnungszeiten und mehr – direkt aus den Firmenunterlagen.
+          Was möchten Sie wissen?
+        </div>
+      </div>
+    </main>
+
+    <!-- Eingabe. Ein <form>, damit auch die Enter-Taste sendet. -->
+    <form id="chat-form" class="chat-form" autocomplete="off">
+      <input
+        id="chat-input"
+        type="text"
+        placeholder="Ihre Frage…"
+        aria-label="Ihre Frage"
+        required>
+      <button id="send-btn" type="submit">Senden</button>
+    </form>
+
+    <footer class="chat-footer">
+      Demo · „Soll &amp; Haben Treuhand Basel" ist eine fiktive Firma.
+    </footer>
+
+  </div>
+
+  <script src="{{ url_for('static', filename='chat.js') }}"></script>
+</body>
+</html>

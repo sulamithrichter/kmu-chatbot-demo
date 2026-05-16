@@ -1,0 +1,10 @@
+# Python-Abhängigkeiten für den KMU-Chatbot
+# Installation: pip install -r requirements.txt
+
+flask==3.1.0            # Web-Framework für Backend und API-Endpoint
+anthropic==0.69.0       # Offizielles SDK für die Anthropic Claude API
+python-dotenv==1.0.1    # Lädt den API-Key sicher aus der .env-Datei
+
+# Hinweis: Die RAG-Logik (rag.py) bauen wir in Schritt 2 bewusst mit
+# reinem Python ohne externe Bibliotheken. Sollten wir dort doch eine
+# Hilfsbibliothek brauchen, ergänzen wir sie hier mit Begründung im DEVLOG.

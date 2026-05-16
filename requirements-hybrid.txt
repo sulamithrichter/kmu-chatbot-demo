@@ -1,0 +1,14 @@
+# Schwere Abhängigkeit NUR für den Hybrid-Retriever (hybrid_rag.py,
+# RETRIEVER=hybrid). Der Standard-Pfad (tfidf) braucht das NICHT –
+# requirements.txt bleibt schlank.
+#
+# Installation ins bestehende .venv:
+#   ./.venv/bin/pip install -r requirements-hybrid.txt
+#
+# Lädt beim ersten Lauf zwei lokale Modelle herunter (Embeddings + Reranker,
+# zusammen mehrere hundert MB). Beides läuft danach LOKAL – kein API-Call,
+# keine Kosten, datenschutzkonform.
+#
+# (Identische Abhängigkeit wie requirements-experiment.txt – ein Paket reicht.)
+
+sentence-transformers

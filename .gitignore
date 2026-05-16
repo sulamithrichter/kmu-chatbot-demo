@@ -1,0 +1,14 @@
+# Geheimnisse – NIEMALS committen
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/

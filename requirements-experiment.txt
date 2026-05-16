@@ -1,0 +1,10 @@
+# NUR für das Embedding-Vergleichs-Experiment (experiment_embeddings.py).
+# Wird von der App (app.py) NICHT benötigt – die App bleibt reines TF-IDF.
+# Schwere Abhängigkeit (zieht PyTorch + Transformers, mehrere hundert MB).
+#
+# Installation ins bestehende .venv:
+#   ./.venv/bin/pip install -r requirements-experiment.txt
+#
+# Beim ersten Lauf lädt das Modell (~470 MB) einmalig herunter.
+
+sentence-transformers
