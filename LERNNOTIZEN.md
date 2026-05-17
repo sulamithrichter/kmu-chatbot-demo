@@ -2,7 +2,7 @@
 
 Vertiefendes Begleitheft zum Projekt. Hier stehen Konzepte, Alternativen und
 Abwägungen, die *über* die konkrete Implementierung hinausgehen – gedacht als
-Material für die Maturaarbeit. Das DEVLOG protokolliert, *was* gebaut wurde;
+Material zum Verständnis. Das DEVLOG protokolliert, *was* gebaut wurde;
 hier steht, *warum so* und *was die Alternativen wären*.
 
 ---
@@ -72,7 +72,7 @@ identisch. Das ist die wichtigste Erkenntnis dieses Kapitels.
 | Eignung kleiner Korpus (Demo) | Sehr gut | Gut, aber Overkill |
 | Eignung grosser Korpus (Produktion) | Wird ungenau | Klar besser |
 | Aufwand bei Doku-Änderung | Trivial (neu zählen) | Neu einbetten + Vektoren speichern |
-| Eignung Maturaarbeit (selbst erklären) | Ideal | Schwer, weil neuronale Black Box |
+| Eignung zum Selbst-Erklären | Ideal | Schwer, weil neuronale Black Box |
 
 **Fazit der Abwägung:** Für ein kleines, gut strukturiertes Demo mit dem Ziel
 „ich verstehe und erkläre jede Zeile" ist TF-IDF überlegen. Embeddings gewinnen,
@@ -97,7 +97,7 @@ Modell selbst betreiben oder einen Dienst aufrufen?
 
 ### Der Datenschutz-Punkt – relevant für eine Treuhandfirma
 
-Besonders lehrreich für *deine* Fallstudie: Eine Treuhandfirma unterliegt einer
+Besonders lehrreich hier: Eine Treuhandfirma unterliegt einer
 **Geheimhaltungspflicht** und verarbeitet sensible Finanzdaten. Würde man
 *kundenspezifische* Dokumente über eine externe Embedding-API einbetten,
 verlassen diese Daten das Haus – ein echtes Compliance-Thema.
@@ -251,7 +251,7 @@ zugegriffen hat. Gegenmassnahme: alten Key widerrufen, neuen erzeugen
 (*Rotation*). Kosten: ein paar Klicks. Kosten eines geleakten Bezahl-Keys:
 potenziell fremde API-Nutzung auf deine Rechnung. Asymmetrie → immer rotieren.
 
-## 4.3 Grundregeln (zum Mitnehmen für Freelance/Maturaarbeit)
+## 4.3 Grundregeln (zum Mitnehmen für die Praxis)
 
 - Secrets nie in Code, nie in `.example`-Dateien, nie in Logs, nie in den
   Chat. Nur in der gitignorten `.env` (oder einem Secret-Manager).
@@ -286,7 +286,7 @@ saubere Antwort – kleine Retrieval-Ungenauigkeiten fallen kaum auf. Im
 Offline-Modus zeigen wir die Chunks fast roh: Schwächen der TF-IDF-Suche
 (siehe Kap. 2) werden direkt sichtbar (z.B. bei sehr kurzen Fragen). Das ist
 kein Bug, sondern die ehrliche Konsequenz daraus, dass im Fallback die
-„Veredelungsschicht" (das LLM) fehlt. Gute Diskussion für die Maturaarbeit:
+„Veredelungsschicht" (das LLM) fehlt. Gute Diskussion zum Vertiefen:
 *Wer macht im RAG eigentlich welche Arbeit – und was passiert, wenn ein
 Teil ausfällt?*
 
@@ -330,7 +330,7 @@ Kein Chunking und kein Wortschatz-Trick löst das grundsätzlich – nur ein
 Verfahren, das *Bedeutung* statt *Wortform* vergleicht. Genau das prüfen wir
 in Experiment (B) mit echten, selbst erzeugten Vergleichsdaten.
 
-Methodischer Merksatz für die Fallstudie: **Eine Schwäche, die man sauber
+Methodischer Merksatz: **Eine Schwäche, die man sauber
 belegt, ist wertvoller als eine, die man wegtuned.**
 
 ---
@@ -368,7 +368,7 @@ Wer gewann die Fussball-WM 2022?        | —              (0.00) | faq.md      
   ihr?" 0.21. Das Grundrauschen irrelevanter Fragen überlappt schwache
   echte Signale → Schwellenwahl ist bei Embeddings *subtiler*, nicht trivialer.
 
-## 7.3 Schlussfolgerung (für die Maturaarbeit)
+## 7.3 Schlussfolgerung
 Embeddings sind im Schnitt besser (lösen semantische Lücken, klarere
 Score-Trennung), aber **kein Allheilmittel**: fehlbar, brauchen weiterhin
 eine – subtilere – Relevanzschwelle, und die Infrastruktur-/Datenschutz-

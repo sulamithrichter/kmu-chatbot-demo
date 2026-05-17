@@ -55,7 +55,7 @@ Entwicklungstagebuch. Pro Session: Was gebaut wurde, welche Entscheidungen warum
 ### Entscheidungen & Begründungen
 - **Retrieval-Verfahren: TF-IDF + Cosine Similarity in reinem Python.**
   Begründung: erfüllt "alles selbst gebaut, keine externen Dienste, voll
-  verstehbar"; ideal fürs Maturaarbeit-Ziel (Mathematik selbst erklärbar);
+  verstehbar"; ideal fürs Lernziel (Mathematik selbst erklärbar);
   für 4 kleine Dokumente qualitativ ausreichend. Architektur ist identisch
   zu Embedding-RAG – nur der Vektorisierungs-Schritt unterscheidet sich.
 - **Bewusst gegen Embeddings entschieden** (für *dieses* Demo): Anthropic hat
@@ -236,7 +236,7 @@ Entwicklungstagebuch. Pro Session: Was gebaut wurde, welche Entscheidungen warum
 
 ### Entscheidungen & Begründungen
 - Lokales Modell statt API: kein Geld, kein externer Dienst, datenschutz-
-  konform – passend zur Treuhand-Fallstudie.
+  konform – passend zum Treuhand-Anwendungsfall.
 - Vergleich auf identischen Chunks (rag.lade_chunks) für Fairness.
 
 ### Lernmomente / Stolpersteine

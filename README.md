@@ -7,7 +7,7 @@ nicht"-Antworten.
 
 > **Hinweis:** „Soll & Haben Treuhand Basel" ist eine **fiktive Firma**.
 > Adresse, Kontaktdaten und Personen sind erfunden. Dies ist ein Demo- und
-> Portfolioprojekt (zugleich Fallstudie einer Maturaarbeit).
+> Portfolioprojekt.
 
 ## Was es kann
 

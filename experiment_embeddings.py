@@ -2,7 +2,7 @@
 experiment_embeddings.py – Vergleich TF-IDF vs. Embeddings.
 
 ISOLIERT vom Hauptcode: app.py bleibt reines, selbst gebautes TF-IDF.
-Dieses Skript ist nur Lern-/Vergleichsmaterial für die Maturaarbeit.
+Dieses Skript ist nur Lern-/Vergleichsmaterial.
 
 Kein API-Aufruf, keine Kosten: Das Embedding-Modell läuft komplett LOKAL
 (sentence-transformers). Genau dieselben Chunks wie die App (rag.lade_chunks)
