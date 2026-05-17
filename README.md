@@ -93,13 +93,20 @@ Fusion + Cross-Encoder-Reranker.** Alle Suchschritte laufen **lokal**
 (datenschutzkonform); nur die finale Antwort geht an die LLM-API.
 
 ```bash
-./.venv/bin/pip install -r requirements-hybrid.txt        # schwer (PyTorch)
-RETRIEVER=hybrid ./.venv/bin/python app.py                # lokale Modelle
+./.venv/bin/pip install -r requirements-hybrid.txt   # schwer (PyTorch)
+RETRIEVER=hybrid ./.venv/bin/python app.py
 ```
 
+**Erststart:** Beim ersten Mal werden zwei lokale Modelle (~mehrere hundert
+MB) **einmalig** vom Hugging-Face-Hub geladen – je nach Verbindung einige
+Minuten (Meldung „Lade Hybrid-Modelle…", **nicht abbrechen**). Ab dem
+zweiten Start erkennt die App die gecachten Modelle automatisch, arbeitet
+offline und startet in **wenigen Sekunden**.
+
 Ohne `RETRIEVER=hybrid` läuft der schlanke TF-IDF-Standard (keine schweren
-Abhängigkeiten). Fehlen die Hybrid-Pakete, fällt die App automatisch auf
-TF-IDF zurück. Konzept & Messungen: `LERNNOTIZEN.md` Kap. 8.
+Abhängigkeiten, sofort startklar). Fehlen die Hybrid-Pakete, fällt die App
+automatisch auf TF-IDF zurück. Konzept & Messungen: `LERNNOTIZEN.md` Kap. 8;
+Debugging-Lektion (HF-Hub-Hang) Kap. 9.
 
 ## Optionales Experiment
 
