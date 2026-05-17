@@ -20,7 +20,58 @@ Abhängigkeit (sentence-transformers), faellt app.py sauber auf TF-IDF
 zurueck. Schwere Abhängigkeiten: siehe requirements-hybrid.txt.
 """
 
+import os
+from pathlib import Path
+
 from rag import RAGIndex
+
+# --- HF-Hub: cache-abhängiger Offline-Schalter (VOR sentence-transformers!) --
+#
+# Problem: huggingface_hub fragt beim Laden den HF-Hub nach Modell-Updates.
+# Unauthentifiziert ist das rate-limitiert -> bei gecachten Modellen "hängt"
+# der Start minutenlang. Lösung: sind die Modelle schon lokal -> Offline
+# erzwingen (Sekunden statt Minuten). Sind sie NICHT da (frischer Klon) ->
+# online lassen, damit sie EINMALIG heruntergeladen werden. So läuft das
+# Projekt bei jedem fehlerfrei – ohne manuelle Schritte.
+# WICHTIG: muss VOR dem sentence-transformers-Import stehen, weil
+# huggingface_hub HF_HUB_OFFLINE beim Import in eine Konstante einliest.
+
+# Diese IDs müssen zu EMBED_MODELL / RERANK_MODELL unten passen.
+_BENOETIGTE_MODELLE = [
+    "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
+]
+
+
+def _hf_cache_dir():
+    """Pfad zum HF-Hub-Cache (respektiert HF_HUB_CACHE / HF_HOME)."""
+    if os.environ.get("HF_HUB_CACHE"):
+        return Path(os.environ["HF_HUB_CACHE"])
+    if os.environ.get("HF_HOME"):
+        return Path(os.environ["HF_HOME"]) / "hub"
+    return Path.home() / ".cache" / "huggingface" / "hub"
+
+
+def _ist_gecacht(repo_id):
+    """True, wenn das Modell schon lokal im HF-Cache liegt (reiner
+    Dateisystem-Check, KEIN Netzaufruf, KEIN schwerer Import)."""
+    ordner = _hf_cache_dir() / ("models--" + repo_id.replace("/", "--"))
+    snapshots = ordner / "snapshots"
+    return snapshots.is_dir() and any(snapshots.iterdir())
+
+
+if all(_ist_gecacht(r) for r in _BENOETIGTE_MODELLE):
+    # Modelle liegen lokal -> Offline: kein rate-limitierter Hub-Check.
+    os.environ.setdefault("HF_HUB_OFFLINE", "1")
+    os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+else:
+    # Frischer Klon: Modelle fehlen -> ONLINE lassen für den einmaligen
+    # Download (mehrere hundert MB, kann ein paar Minuten dauern). Ab dem
+    # nächsten Start greift automatisch der schnelle Offline-Pfad.
+    print("[Hybrid] Modelle noch nicht lokal vorhanden – einmaliger "
+          "Download vom Hugging-Face-Hub (mehrere hundert MB, kann einige "
+          "Minuten dauern). Ab dem nächsten Start lädt es in Sekunden.",
+          flush=True)
 
 # sentence-transformers liefert beides:
 #  - SentenceTransformer = Bi-Encoder  -> Embeddings (Schritt B)

@@ -450,4 +450,53 @@ und teuer-fein-sortieren – kein einzelner magischer Algorithmus.
 
 ---
 
+# Kapitel 9: Performance lokaler Modelle & ehrliche Kommunikation
+
+## 9.1 Warum ist der Hybrid-Modus „langsam"?
+Zwei verschiedene Effekte sauber trennen:
+- **Cold Start (einmal pro Serverstart):** PyTorch-Import + zwei vor-
+  trainierte Modelle (Embedding ~470 MB, Reranker ~hunderte MB) in den
+  RAM. Verdoppelt durch den Flask-Auto-Reloader (zwei Prozesse!). Fix:
+  `use_reloader=False` -> Modelle laden 1×.
+- **Pro Frage:** Query-Embedding = ms. Der **Cross-Encoder** rechnet je
+  Kandidat einen Transformer-Durchlauf auf der CPU -> spürbar.
+
+**Wichtig (für die Arbeit):** Cloud-Embeddings lösen den Hauptengpass
+NICHT (der liegt im Modell-Laden + lokalem Reranker, nicht in der
+Embedding-Rechnung) und opfern den Datenschutz, der ja der Grund fürs
+lokale Setup war. Richtige Hebel sind lokal: Reloader aus, Warm-up beim
+Start, weniger Rerank-Kandidaten, ggf. Apple-MPS. -> *Engpass zuerst
+korrekt diagnostizieren, dann gezielt optimieren – nicht reflexhaft „in
+die Cloud".*
+
+## 9.1b Der echte „Hang": HF-Hub-Netz-Check (Debugging-Lektion)
+
+Später zeigte sich: Der Hybrid-Start hing nicht 40 s, sondern **7+ Minuten**
+– nicht beim Rechnen, sondern weil `sentence-transformers`/`huggingface_hub`
+beim Import/Laden den Hugging-Face-Hub kontaktieren (Update-Check). Un-
+authentifiziert wird das rate-limitiert -> minutenlange Retries.
+
+**Methodische Lektion (wichtig für die Arbeit):**
+- *„Hängt" ist nicht „langsam".* Nicht raten – **instrumentieren**:
+  `faulthandler.dump_traceback_later(60, exit=True)` zeigt exakt die
+  hängende Codestelle; Zeitmessung pro Schritt trennt Import/Netz/Rechnen.
+- Schwere ML-Bibliotheken machen beim Import/Load **Netz-Aufrufe**. Für
+  einen reproduzierbaren, schnellen Start: **Offline erzwingen**
+  (`HF_HUB_OFFLINE=1`, `TRANSFORMERS_OFFLINE=1`), Modelle sind nach 1×
+  Download lokal.
+- **Reihenfolge zählt:** huggingface_hub liest die Variable *beim Import*
+  in eine Konstante. Wird sie erst danach gesetzt, wirkt sie nicht – darum
+  muss der Offline-Schalter VOR allen Drittanbieter-Imports stehen.
+
+## 9.2 Ehrliche Aussendarstellung
+„Keine Cloud-Bausteine" war ungenau: die finale Antwort kommt von der
+Anthropic-Claude-API (Cloud), und der Hybrid nutzt vortrainierte Modelle
+(lokal, aber nicht selbst implementiert). Die präzise Aussage – *Retrieval
+selbst gebaut & lokal, Antwortformulierung via Claude-API* – ist nicht nur
+korrekt, sondern **glaubwürdiger** als ein zu starkes Versprechen.
+Methodik-Merksatz: Eine technische Behauptung muss genau die Grenze
+benennen, an der sie gilt.
+
+---
+
 *Nächste Kapitel folgen (z.B. Deployment), falls das Projekt weiterwächst.*

@@ -319,3 +319,80 @@ Schwelle + mehr Komplexität.
 
 ### Offene Punkte
 - [ ] (wie zuvor) git commit/push durch Sulamith; optional Tontuning/Deploy
+
+---
+
+## Session 10 – 2026-05-16 (Performance & ehrliche Kommunikation)
+
+Zwei kritische Rückfragen von Sulamith.
+
+### Was gebaut/geändert wurde
+- `app.py`: `app.run(debug=True, use_reloader=False, port=PORT)`. Der
+  Flask-Reloader startet die App in ZWEI Prozessen -> im Hybrid-Modus
+  wurden Embedding- + Reranker-Modell DOPPELT geladen. Ohne Reloader
+  laden sie genau einmal -> deutlich schnellerer Start.
+- Portfolio (`sulamithrichter/portfolio`): Chatbot-Beschreibung ehrlich
+  präzisiert (Retrieval selbst gebaut/lokal; Antwort via Claude-API),
+  committet & gepusht (531b3de..67943a5).
+
+### Lernmomente
+- **Cold-Start von lokalen Modellen** ist der Hauptengpass des Hybrid-
+  Modus (PyTorch-Import + 2 Modelle in RAM), NICHT die Embedding-Rechnung.
+  Cloud-Embeddings würden das nicht lösen und den Datenschutz opfern ->
+  lokal optimieren ist richtig (1. Reloader aus; weitere Optionen: Warm-up,
+  weniger Rerank-Kandidaten, Apple-MPS).
+- **Ehrlichkeit in der Aussendarstellung:** "keine Cloud-Bausteine" war
+  ungenau, weil die LLM-Antwort über die Claude-API (Cloud) läuft und der
+  Hybrid vortrainierte Modelle nutzt. Präzise Formulierung ist glaub-
+  würdiger als ein zu starkes Versprechen. (Methodik-Punkt für die Arbeit.)
+
+### Offene Punkte
+- [ ] Entscheidung: app.py-Fix auch ins öffentliche kmu-chatbot-demo-Repo
+      pushen? (lokal gefixt, Remote noch nicht)
+- [ ] Optional: weitere Speed-Fixes (Warm-up/Kandidaten/MPS), Deployment
+
+---
+
+## Session 11 – 2026-05-16 (Hybrid-Hang gelöst: HF-Hub offline)
+
+### Symptom
+Hybrid-Start „hängt" minuten- bis 7+ minutenlang; tfidf sofort.
+
+### Diagnose (instrumentiert, auf Sulamiths Maschine)
+- Modellgewichte laden in <1 s aus dem lokalen Cache.
+- 7+ Min = **reines Netz-Warten**: `sentence-transformers`/`huggingface_hub`
+  kontaktieren beim Import/Laden den HF-Hub (Update-Check). Unauthentifiziert
+  rate-limitiert -> lange Retries -> scheinbarer „Hang".
+- Mit erzwungenem Offline: gesamter Hybrid-Start ~9–48 s (davon der Grossteil
+  einmaliger Import von transformers+torch), **kein Hang**.
+
+### Fix
+`os.environ.setdefault("HF_HUB_OFFLINE","1")` + `TRANSFORMERS_OFFLINE`
+**ganz oben in app.py, VOR allen Imports** (huggingface_hub liest die
+Variable beim Import in eine Konstante -> später gesetzt = wirkungslos;
+darum scheiterte der erste Versuch in hybrid_rag.py). Verifiziert ohne
+jegliche Shell-Variable: `HybridRetriever in 9.4s`, `HF_HUB_OFFLINE=1`.
+
+### Lernmoment
+„Hängt" ≠ „rechnet". Erst instrumentieren (Stacktrace/Timing) statt raten.
+Schwere ML-Libs machen beim Import/Load Netz-Calls; für reproduzierbaren,
+schnellen Start: Offline erzwingen, und Konfig früh genug setzen
+(Reihenfolge der Imports zählt). Modelle sind nach 1× Download lokal.
+
+### Nachtrag: robust für fremde Klone (Sulamiths Einwand)
+Unbedingtes `HF_HUB_OFFLINE=1` würde einen FRISCHEN Klon (Modelle noch
+nicht lokal) scheitern lassen – offline verbietet den nötigen Erst-
+Download. Lösung: **cache-abhängiger Schalter** in hybrid_rag.py
+(reiner Dateisystem-Check vor dem sentence-transformers-Import):
+- Modelle gecacht  -> Offline (Start ~9 s, kein Hub-Hang)
+- Modelle fehlen   -> online lassen + Hinweis, einmaliger Download,
+  danach ab nächstem Start automatisch der schnelle Offline-Pfad.
+Verifiziert: neuer Code, ohne Shell-Var, `HybridRetriever in 8.9s`,
+HF_HUB_OFFLINE automatisch=1. Logik gegen leeren Cache gegengetestet.
+Lehre: „offline für Speed" muss mit „funktioniert beim Erstnutzer"
+versöhnt werden -> Konfiguration *bedingt* statt absolut.
+
+### Offene Punkte
+- [ ] app.py + hybrid_rag.py-Fix ins öffentliche Repo pushen? (lokal gefixt;
+      öffentliches Repo gibt fremden Klonen sonst den langsamen Hang-Stand)
+- [ ] Optional: Lib-Import (~40 s kalt) bleibt; bewusst belassen.

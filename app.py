@@ -10,6 +10,13 @@ Der API-Key wird NICHT im Code gespeichert, sondern aus der .env-Datei geladen
 """
 
 import os
+
+# Hinweis: Die HF-Hub-Offline-Logik (damit der Hybrid-Start nicht am
+# rate-limitierten Hub-Check hängt) sitzt in hybrid_rag.py – und zwar
+# CACHE-ABHÄNGIG: schon gecacht -> offline/schnell; noch nicht da ->
+# online für den einmaligen Download. So läuft auch ein frischer Klon
+# fehlerfrei. tfidf-Standard ist davon gar nicht betroffen.
+
 from flask import Flask, request, jsonify, render_template
 from jinja2 import TemplateNotFound
 from dotenv import load_dotenv
@@ -64,12 +71,20 @@ app = Flask(__name__)
 # Retriever EINMAL beim Serverstart bauen (nicht pro Anfrage!).
 # Beide Klassen haben dieselbe Methode finde_relevante_chunks(frage, top_k)
 # -> der Rest von app.py muss nicht wissen, welcher Retriever aktiv ist.
+print(f"[Start] app.py initialisiert, Retriever-Modus: {RETRIEVER} …",
+      flush=True)
+
 if RETRIEVER == "hybrid":
     try:
+        # Diese Meldung kommt SOFORT – sonst wirkt der lange Modell-Ladevorgang
+        # wie ein eingefrorenes Terminal ("Start funktioniert nicht").
+        print("[Start] Lade Hybrid-Modelle (Embedding + Reranker). Beim "
+              "ersten Mal Download, danach ~10–40 s. Bitte warten …",
+              flush=True)
         from hybrid_rag import HybridRetriever
         index = HybridRetriever()
-        print("[Retriever] hybrid (TF-IDF + Embeddings + RRF + Reranker)",
-              flush=True)
+        print("[Retriever] hybrid bereit (TF-IDF + Embeddings + RRF + "
+              "Reranker)", flush=True)
     except Exception as fehler:
         # Schwere Dependency fehlt o.ä. -> nicht crashen, sauber zurueckfallen.
         print(f"[Retriever] hybrid nicht verfügbar -> Fallback tfidf: "
@@ -196,6 +211,10 @@ def chat():
 # --- Baustein 4: lokaler Start -----------------------------------------------
 
 if __name__ == "__main__":
-    # debug=True: automatischer Reload + Fehlerseiten beim Entwickeln.
-    # Für ein späteres echtes Deployment würde man debug=False setzen.
-    app.run(debug=True, port=PORT)
+    # debug=True: Fehlerseiten beim Entwickeln.
+    # use_reloader=False: WICHTIG fuer den Hybrid-Modus. Der Auto-Reloader
+    # startet die App in ZWEI Prozessen -> der Retriever (und damit die
+    # schweren Modelle Embedding + Reranker) wuerde sonst DOPPELT geladen.
+    # Ohne Reloader laden die Modelle genau einmal -> deutlich schnellerer
+    # Start. (Fuer ein echtes Deployment ohnehin debug=False.)
+    app.run(debug=True, use_reloader=False, port=PORT)
