@@ -68,13 +68,21 @@ ist erlaubt, solange die Auskunft korrekt und sachlich bleibt.
 
 app = Flask(__name__)
 
-# Retriever EINMAL beim Serverstart bauen (nicht pro Anfrage!).
-# Beide Klassen haben dieselbe Methode finde_relevante_chunks(frage, top_k)
-# -> der Rest von app.py muss nicht wissen, welcher Retriever aktiv ist.
-print(f"[Start] app.py initialisiert, Retriever-Modus: {RETRIEVER} …",
+# BEIDE Retriever EINMAL beim Start bauen (nicht pro Anfrage!). Der
+# Umschalter im Frontend wählt pro Anfrage -> beide müssen bereit sein.
+# Beide Klassen haben dieselbe Methode finde_relevante_chunks(frage, top_k).
+print(f"[Start] app.py initialisiert. Standard-Retriever: {RETRIEVER} …",
       flush=True)
 
-if RETRIEVER == "hybrid":
+# tfidf ist leichtgewichtig (reines rag.py) und immer verfügbar.
+tfidf_index = RAGIndex()
+print("[Retriever] tfidf bereit (reines rag.py)", flush=True)
+
+# hybrid ist schwer (PyTorch + 2 Modelle). Im try/except gebaut: fehlt eine
+# Dependency oder ist es per ENABLE_HYBRID=0 abgeschaltet (schnelles lokales
+# tfidf-Arbeiten) -> None, /chat fällt ehrlich auf tfidf zurück.
+hybrid_index = None
+if os.environ.get("ENABLE_HYBRID", "1") != "0":
     try:
         # Diese Meldung kommt SOFORT – sonst wirkt der lange Modell-Ladevorgang
         # wie ein eingefrorenes Terminal ("Start funktioniert nicht").
@@ -82,17 +90,16 @@ if RETRIEVER == "hybrid":
               "ersten Mal Download, danach ~10–40 s. Bitte warten …",
               flush=True)
         from hybrid_rag import HybridRetriever
-        index = HybridRetriever()
+        hybrid_index = HybridRetriever()
         print("[Retriever] hybrid bereit (TF-IDF + Embeddings + RRF + "
               "Reranker)", flush=True)
     except Exception as fehler:
-        # Schwere Dependency fehlt o.ä. -> nicht crashen, sauber zurueckfallen.
-        print(f"[Retriever] hybrid nicht verfügbar -> Fallback tfidf: "
+        # Schwere Dependency fehlt o.ä. -> nicht crashen, weiter mit tfidf.
+        print(f"[Retriever] hybrid nicht verfügbar -> nur tfidf: "
               f"{fehler}", flush=True)
-        index = RAGIndex()
-else:
-    index = RAGIndex()
-    print("[Retriever] tfidf (reines rag.py)", flush=True)
+
+# Nachschlagetabelle für die Auswahl pro Anfrage (siehe /chat).
+RETRIEVERS = {"tfidf": tfidf_index, "hybrid": hybrid_index}
 
 # Key aus der Umgebung holen. Fehlt er, bauen wir den Client NICHT (er würde
 # sonst beim Start eine Exception werfen). Stattdessen läuft der Server weiter
@@ -178,12 +185,24 @@ def chat():
     if not frage:
         return jsonify({"reply": "Bitte stellen Sie eine Frage."}), 400
 
+    # Retriever-Wahl aus der Anfrage (Frontend-Umschalter). Unbekannt/leer
+    # -> Standard aus RETRIEVER. "hybrid" gewünscht, aber nicht geladen
+    # -> ehrlicher Fallback auf tfidf (Graceful Degradation, LERNNOTIZEN Kap. 5).
+    gewuenscht = (daten.get("retriever") or RETRIEVER).lower()
+    if gewuenscht not in RETRIEVERS:
+        gewuenscht = "tfidf"
+    index = RETRIEVERS.get(gewuenscht)
+    aktiv = gewuenscht
+    if index is None:                       # hybrid angefragt, aber nicht da
+        index, aktiv = RETRIEVERS["tfidf"], "tfidf"
+
     # 1) RAG: relevante Chunks holen (reine Mathematik, kein API-Aufruf)
     treffer = index.finde_relevante_chunks(frage, top_k=TOP_K)
 
     # Kleiner Entwickler-Log (keine Secrets): zeigt, dass RAG arbeitet.
     quellen = [f"{c['quelle']}::{c['text'].splitlines()[0]}" for _, c in treffer]
-    print(f"[RAG] Frage={frage!r} -> {quellen or 'kein Treffer'}", flush=True)
+    print(f"[RAG:{aktiv}] Frage={frage!r} -> {quellen or 'kein Treffer'}",
+          flush=True)
 
     # 2) Prompt bauen
     user_nachricht = baue_user_nachricht(frage, treffer)
@@ -197,7 +216,8 @@ def chat():
                 system=SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": user_nachricht}],
             )
-            return jsonify({"reply": antwort.content[0].text, "mode": "live"})
+            return jsonify({"reply": antwort.content[0].text,
+                            "mode": "live", "retriever": aktiv})
         except Exception as fehler:
             # Kein Crash, keine Details ans Frontend – Server-Log + Fallback.
             print(f"[Live-Call fehlgeschlagen -> Offline-Fallback] {fehler}",
@@ -205,16 +225,18 @@ def chat():
 
     # 4) Offline-Fallback: kein Key ODER API-Fehler (z.B. kein Guthaben).
     #    Statt einer Fehlermeldung eine echte Auskunft aus den Dokumenten.
-    return jsonify({"reply": antwort_aus_chunks(treffer), "mode": "offline"})
+    return jsonify({"reply": antwort_aus_chunks(treffer),
+                    "mode": "offline", "retriever": aktiv})
 
 
 # --- Baustein 4: lokaler Start -----------------------------------------------
 
 if __name__ == "__main__":
-    # debug=True: Fehlerseiten beim Entwickeln.
-    # use_reloader=False: WICHTIG fuer den Hybrid-Modus. Der Auto-Reloader
-    # startet die App in ZWEI Prozessen -> der Retriever (und damit die
-    # schweren Modelle Embedding + Reranker) wuerde sonst DOPPELT geladen.
-    # Ohne Reloader laden die Modelle genau einmal -> deutlich schnellerer
-    # Start. (Fuer ein echtes Deployment ohnehin debug=False.)
-    app.run(debug=True, use_reloader=False, port=PORT)
+    # host="0.0.0.0": von ausserhalb des Containers erreichbar – ohne das
+    #   bindet Flask nur an 127.0.0.1 und kein Cloud-Hoster erreicht den Port
+    #   (siehe LERNNOTIZEN Kap. 10).
+    # debug=False: in Produktion Pflicht (der Werkzeug-Debugger erlaubt sonst
+    #   Code-Ausführung über die Fehlerseite).
+    # use_reloader=False: der Auto-Reloader startet die App in ZWEI Prozessen
+    #   -> die schweren Hybrid-Modelle würden DOPPELT geladen.
+    app.run(host="0.0.0.0", port=PORT, debug=False, use_reloader=False)

@@ -125,3 +125,31 @@ body {
   border-top: 1px solid var(--rand);
   background: #fafbfc;
 }
+
+/* Umschalter Suchverfahren (tf-idf | hybrid) – schmaler Balken unter dem Kopf */
+.retriever-switch {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.5rem 1.4rem;
+  border-bottom: 1px solid var(--rand);
+  background: #fafbfc;
+  font-size: 0.82rem;
+  color: var(--ink);
+}
+.retriever-switch .rs-label { font-weight: 600; color: var(--muted); }
+.retriever-switch label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
+}
+.retriever-switch input { accent-color: var(--marine); cursor: pointer; }
+
+/* Modus-Label unter einer Bot-Antwort: "via hybrid · live" */
+.msg-meta {
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin-top: 0.25rem;
+  padding-left: 0.2rem;
+}

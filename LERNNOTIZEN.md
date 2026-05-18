@@ -499,4 +499,278 @@ benennen, an der sie gilt.
 
 ---
 
-*Nächste Kapitel folgen (z.B. Deployment), falls das Projekt weiterwächst.*
+# Kapitel 10: Deployment – von „läuft auf meinem Laptop" zu „läuft im Internet"
+
+Bis hierher lief alles lokal: `python app.py`, Browser auf
+`127.0.0.1:5001`. Für eine Live-Demo auf `sulamithrichter.ch` muss der Code
+auf einem fremden Rechner im Internet laufen, rund um die Uhr, mit einer
+öffentlichen Adresse. Dieses Kapitel erklärt, *was* dafür nötig war, *warum*
+genau so, und welche Konzepte (Docker, Hugging Face, Ports, Secrets) dahinter
+stecken.
+
+## 10.1 Was „deployen" eigentlich heisst
+
+„Deployen" = den Code von der Entwicklungsmaschine auf einen **Server**
+bringen, der ihn dauerhaft ausführt und über eine **URL** erreichbar macht.
+Drei Dinge ändern sich gegenüber lokal:
+
+1. **Erreichbarkeit:** Der Server muss Anfragen aus dem ganzen Internet
+   annehmen, nicht nur von „diesem Computer".
+2. **Reproduzierbarkeit:** Auf dem fremden Rechner ist *nichts* installiert –
+   Python-Version, Pakete, Modelle müssen mitgeliefert oder beschrieben sein.
+3. **Geheimnisse:** Der API-Key liegt nicht mehr in einer lokalen `.env`,
+   sondern muss sicher in die fremde Umgebung gelangen.
+
+Genau diese drei Punkte strukturieren die folgenden Abschnitte.
+
+## 10.2 Die zwei stillen Show-Stopper: `0.0.0.0` vs `127.0.0.1` und der PORT
+
+`app.run()` band bisher **ohne `host`-Angabe** – Flasks Default ist
+`127.0.0.1`. Das ist die *Loopback*-Adresse: „nur Verbindungen von diesem
+selben Rechner". Lokal ideal (sicher, niemand sonst kommt dran). In der Cloud
+**fatal**: Der Hoster leitet Aussen-Anfragen an den Container weiter, aber der
+Server hört nur auf „mich selbst" → der Hoster meldet „kein offener Port",
+das Deployment scheitert. Fix: `host="0.0.0.0"` = „auf allen
+Netzwerk-Schnittstellen lauschen".
+
+| Adresse | Bedeutung | Lokal | In der Cloud |
+|---|---|---|---|
+| `127.0.0.1` | nur dieser Rechner | gut (sicher) | unerreichbar |
+| `0.0.0.0` | alle Schnittstellen | ok | **nötig** |
+
+Der zweite Punkt: **der Port wird injiziert.** Cloud-Hoster sagen der App per
+Umgebungsvariable `PORT`, auf welchem Port sie lauschen soll – die App darf
+ihn sich nicht aussuchen. Unser Code war hier schon richtig:
+`PORT = int(os.environ.get("PORT", "5001"))` – nimmt `PORT` aus der Umgebung,
+lokal Fallback 5001. Im Container setzen wir `PORT=7860` (Hugging-Face-
+Standard).
+
+**Merksatz:** Lokal ist die Frage „wer darf mich erreichen?" trivial, in der
+Cloud ist sie die erste, an der man scheitert. `0.0.0.0` + injizierter Port
+sind kein Detail, sondern die Eintrittskarte.
+
+## 10.3 Docker in fünf Begriffen
+
+Damit „auf dem fremden Rechner ist nichts installiert" lösbar wird, gibt es
+**Docker**:
+
+- **Image** – ein eingefrorenes, komplettes Mini-System: Betriebssystem-
+  Basis + Python + unsere Pakete + unser Code + die Modelle. Ein Bauplan-
+  Ergebnis, unveränderlich.
+- **Container** – ein laufendes Image (das Image ist das Rezept, der
+  Container das gekochte, laufende Gericht).
+- **`Dockerfile`** – das Rezept: Zeile für Zeile, wie aus „nacktes Python"
+  unser fertiges Image wird.
+- **Build** – das Rezept abarbeiten → Image. Passiert **einmal** (bei uns
+  auf Hugging Face nach jedem Push).
+- **Layer-Cache** – jede `Dockerfile`-Zeile ist eine Schicht; ändert sich
+  eine Zeile nicht, wird die Schicht wiederverwendet. Darum kopieren wir im
+  `Dockerfile` *zuerst* nur `requirements*.txt` und installieren, *dann* den
+  restlichen Code: Code-Änderungen lösen so kein erneutes (langsames)
+  `pip install` aus.
+
+Warum Docker und nicht „nur ein Requirements-File hochladen"? Weil das Image
+auch Python-Version, System-Bibliotheken **und die gebackenen ML-Modelle**
+einfriert – exakt reproduzierbar, egal auf welchem Hoster.
+
+## 10.4 Was Hugging Face Spaces ist – und warum dorthin
+
+**Hugging Face** ist die zentrale Plattform für ML-Modelle (von dort lädt
+`sentence-transformers` in Kap. 8/9 die Modelle). **Spaces** ist ihr
+Hosting-Dienst für ML-Demos. Für uns relevant:
+
+- **SDK „Docker":** Spaces kann unser `Dockerfile` direkt bauen und starten –
+  unser Flask-Code läuft **1:1**, kein Umschreiben auf Gradio/Streamlit.
+- **Konfiguration im README:** Spaces liest einen YAML-Block am Anfang von
+  `README.md` (`sdk: docker`, `app_port: 7860`, Titel …). Darum steht dieser
+  Block jetzt dort – GitHub rendert ihn nicht, stört also die Projekt-README
+  nicht.
+- **Gratis-CPU-Tier: ~16 GB RAM.** Das ist der entscheidende Punkt
+  (Abschnitt 10.5).
+- **Secrets:** im Space-Dashboard setzbar, kommen als Umgebungsvariable im
+  Container an – nie im Code (Abschnitt 10.8).
+- **Schlafverhalten:** der Gratis-Space pausiert nach längerer Inaktivität
+  und startet beim nächsten Besuch neu (Abschnitt 10.10).
+
+## 10.5 Warum nicht Render? Die 512-MB-Rechnung (Trade-off als Begründung)
+
+Ursprünglicher Plan war Render.com (klassischer Web-Hoster). Renders
+Gratis-Tier hat **512 MB RAM**. Rechnen wir den Hybrid-Bedarf:
+
+- PyTorch + Transformers im Speicher: mehrere hundert MB allein die Bibliothek
+- Embedding-Modell (Kap. 7) + Cross-Encoder-Reranker (Kap. 8): zusammen
+  mehrere hundert MB
+- Flask + Python-Grundlast obendrauf
+
+→ Der Hybrid-Modus **passt nicht in 512 MB**; der Container würde beim
+Modell-Laden abstürzen (OOM). tfidf allein wäre kein Problem – aber die ganze
+Idee dieser Demo ist ja, **beide** vergleichbar zu machen.
+
+Daraus folgten die zwei realen Optionen: (a) ein bezahltes Render-Plan mit
+mehr RAM, oder (b) ein Hoster, dessen Gratis-Tier genug RAM hat. Hugging Face
+Spaces (16 GB gratis, *für genau solche Modelle gebaut*) ist (b). Render
+verschwindet damit nicht aus dem Projekt – sein RAM-Limit ist die
+*dokumentierte Begründung* für die Plattformwahl. Das ist exakt die Linie aus
+Kap. 1 und 9: **Die Wahl der Infrastruktur ist eine begründete
+Ressourcen-Abwägung, kein Default.** „Nimm einfach Render" wäre geraten
+gewesen; erst die RAM-Rechnung führte zur richtigen Entscheidung.
+
+## 10.6 Die Architektur: ein Prozess, beide Retriever (kein Split, kein CORS)
+
+Zwischenüberlegung war ein **Split**: tfidf auf Render (leicht), Hybrid auf
+einem zweiten Dienst, das Frontend ruft je nach Schalter den einen oder
+anderen. Verworfen, sobald 16 GB RAM auf *einem* HF-Space klar waren:
+
+| | Split (2 Dienste) | Ein HF-Space (gewählt) |
+|---|---|---|
+| Deployments pflegen | 2 | **1** |
+| CORS nötig | ja | **nein** |
+| Secrets setzen | 2× | **1×** |
+| Doku-Quelle | droht zu splitten | **eine** |
+
+**Was ist CORS und warum sparen wir es uns?** Ruft eine Webseite per
+JavaScript einen Server *einer anderen Herkunft* (anderes Domain/Port) auf,
+blockiert der Browser das aus Sicherheit, solange dieser Server nicht
+ausdrücklich per HTTP-Kopfzeile (*Cross-Origin Resource Sharing*) zustimmt.
+Beim Split hätte das Frontend zwei verschiedene Server gerufen → CORS-
+Konfiguration nötig. Bei *einem* Space kommen Seite **und** `/chat` von
+derselben Herkunft → keine CORS-Frage, weniger Code, weniger Fehlerquellen.
+
+Möglich wurde die Ein-Prozess-Lösung, weil der Code es schon hergab: Der
+`RETRIEVER`-Schalter (Kap. 8) war die saubere Naht, und `HybridRetriever`
+*enthält* intern bereits einen `RAGIndex` (den tfidf-Arm). Wir laden beim
+Start beide in ein Dict `RETRIEVERS`; `/chat` liest den Wunsch-Retriever aus
+der Anfrage und wählt pro Frage. Ist `hybrid` nicht geladen → ehrlicher
+Fallback auf `tfidf`, im Antwort-Label sichtbar (Graceful Degradation,
+Kap. 5; ehrliche Kennzeichnung, Kap. 9.2).
+
+**Merksatz:** Gutes früheres Design (eine austauschbare Retriever-
+Schnittstelle) macht eine spätere, ungeplante Anforderung fast gratis.
+
+## 10.7 Modelle ins Image backen – die Auszahlung von Kapitel 9.1b
+
+Kap. 9.1/9.1b war der Schmerz: Hybrid-Kaltstart hing minutenlang am
+Hugging-Face-Hub-Netz-Check. Lösung damals: cache-abhängiger Offline-Schalter
+– sind die Modelle lokal, schalte offline. Hier zahlt sich das aus:
+
+Im `Dockerfile` laden wir **schon im Build** beide Modelle herunter (ein
+`RUN python -c "...SentenceTransformer(...); CrossEncoder(...)"`). Sie landen
+im HF-Cache *innerhalb des Images*. Wir setzen `HF_HOME` so, dass Build und
+Laufzeit denselben Cache-Pfad nutzen. Folge zur Laufzeit: Die Modelle sind
+schon da → der Schalter aus Kap. 9.1b erkennt das **automatisch**, schaltet
+offline, kein Hub-Hang, kein Download beim ersten Besucher. **Ohne eine
+einzige Codeänderung** – die alte Lektion trägt die neue Lösung.
+
+**Merksatz:** Ein sauber gebauter Mechanismus von früher zahlt in einem
+ganz anderen Kontext (Docker-Build statt lokalem Lauf) erneut aus.
+
+## 10.8 Secrets in der Cloud (Verlängerung von Kapitel 4)
+
+Kap. 4: Key nur in der gitignorierten `.env`, nie im Code/Repo. In der Cloud
+gibt es keine `.env` aus deinem Ordner – also:
+
+- Hugging Face: **Settings → Secrets → `ANTHROPIC_API_KEY`**. Der Wert kommt
+  als Umgebungsvariable im Container an; `os.environ.get("ANTHROPIC_API_KEY")`
+  in `app.py` liest ihn unverändert. Die Code-Logik bleibt gleich, nur die
+  *Quelle* der Variable wechselt (lokal `.env` → Cloud Secret-Store).
+- `.dockerignore` schliesst `.env` zusätzlich vom Image aus
+  (Defense-in-Depth: selbst wenn lokal eine `.env` existiert, gelangt sie nie
+  ins Image).
+- Ohne Key startet die Demo trotzdem und läuft im Offline-Modus – dieselbe
+  Graceful Degradation wie lokal (Kap. 5), jetzt auch in der Cloud nützlich.
+
+**Merksatz:** „Secret nicht in den Code" ist plattformunabhängig; nur der
+*Ort* des Secrets ändert sich. Gute Trennung lokal macht den Cloud-Schritt
+zur Einzeiler-Konfiguration.
+
+## 10.9 Ehrliche Grenze: Flask-Dev-Server vs. produktiver WSGI-Server
+
+`python app.py` startet Flasks **eingebauten Entwicklungs-Server**. Dessen
+eigene Doku sagt ausdrücklich: *nicht für Produktion* – er ist single-/
+wenig-threaded, nicht für viele gleichzeitige Nutzer oder feindlichen
+Internet-Traffic gehärtet. Produktiv nimmt man einen **WSGI-Server** wie
+*gunicorn* (mehrere Worker-Prozesse, robuster).
+
+Wir behalten bewusst `python app.py`, weil:
+- Es ist eine **Portfolio-/Lern-Demo** mit sehr geringer Last, nicht ein
+  Produktivsystem mit echten Kunden.
+- Es hält den Stack schlank und jede Zeile erklärbar (das Projektziel).
+- Der Engpass dieser Demo ist ohnehin der Hybrid-Modell-Speicher, nicht die
+  Request-Parallelität.
+
+Aber – und das ist der Punkt im Stil dieses Projekts – wir **verstecken die
+Grenze nicht, wir benennen sie**: Für echten Produktivbetrieb wäre
+`gunicorn app:app` mit mehreren Workern der nächste Schritt (mehr RAM nötig,
+weil jeder Worker die Modelle lädt – wieder eine Ressourcen-Abwägung).
+
+**Merksatz (gleiche Linie wie Kap. 7/9.2):** Eine bewusst akzeptierte,
+klar benannte Grenze ist glaubwürdiger als eine kaschierte.
+
+## 10.10 Kaltstart & ehrliche UX
+
+Der Gratis-Space pausiert nach Inaktivität; der erste Besuch danach startet
+den Container neu. Selbst mit gebackenen Modellen kostet der PyTorch-Import +
+das Modell-Laden in den RAM einige Sekunden (Kap. 9.1: das ist der echte,
+verbleibende Cold-Start – der *Download* ist durch 10.7 weg, der *Import/Load*
+bleibt). Konsequenz für die Demo: ein ehrlicher „tippt…"/Warte-Zustand statt
+eines eingefrorenen Eindrucks – dieselbe Haltung wie der Offline-Hinweis aus
+Kap. 5: dem Nutzer sagen, was gerade passiert, statt etwas vorzutäuschen.
+
+## 10.11 Der Datenfluss bleibt – nur der Standort ändert sich
+
+Wichtig fürs mentale Modell: RAG, Prompt-Bau, der Anthropic-Aufruf, der
+Offline-Fallback – **nichts davon ändert sich beim Deployment**. Es ist
+exakt derselbe Code, nur läuft er statt auf `127.0.0.1` auf einem
+HF-Container. Browser → unser Server (jetzt im Container) → Anthropic-API;
+der Browser sieht den Key nie (Kap. 3.4 gilt unverändert). Deployment ist
+**Verpacken und Hinstellen**, keine Neuentwicklung – wenn die Architektur
+vorher sauber war.
+
+## 10.12 Verifizieren statt raten: der HF-Connector und die Docker-Layer-Falle
+
+Ein Hugging-Face-Connector (MCP) wurde später angebunden. Zwei lehrreiche
+Punkte daraus:
+
+### Werkzeuge ehrlich einordnen
+Der Connector kann **lesen/suchen/abfragen** (wer bin ich, welche Modelle/
+Spaces gibt es, Doku, bestehende Spaces aufrufen) – er kann **nicht** einen
+Space anlegen, Dateien pushen oder Secrets setzen. Ein Werkzeug zu haben
+heisst nicht, dass es jede Aufgabe kann; man muss seine *Fähigkeitsgrenze*
+kennen, statt anzunehmen „Connector da → alles automatisch". Die Erzeugung
+des Space, der Push und das Secret bleiben darum bewusste, manuelle Schritte
+(`DEPLOY.md`). Das Secret insbesondere **gehört Sulamith allein** – es einem
+Dritten (auch einem Assistenten) in die Hand zu geben, widerspräche genau
+Kap. 4. Eine konsequente Sicherheitsregel gilt ohne Ausnahme, sonst ist sie
+keine.
+
+### Die Docker-Layer-Falle (echter, behobener Fehler)
+Der Connector lieferte die offizielle HF-Doku – und die deckte einen Bug im
+ersten Dockerfile auf. Wichtiges Docker-Konzept dahinter:
+
+Ein Image besteht aus **Layern** (eine pro Bauschritt). Layer sind additiv
+und unveränderlich: Ändert ein späterer Schritt die *Eigentümer/Rechte* einer
+Datei (`chown`), kann die Datei nicht „in place" geändert werden – es entsteht
+eine **neue Kopie in der neuen Layer**, die alte bleibt im Image. Mein erster
+Entwurf baute als root und machte am Ende `chown -R /app`. Bei GB-grossen,
+ins Image gebackenen Modellen hätte das praktisch **alle Modell-Dateien
+dupliziert → fast doppelt so grosses Image**.
+
+Das offizielle HF-Muster vermeidet das strukturell: User (UID 1000) **früh**
+anlegen, **früh** `USER` wechseln, mit `COPY --chown=user` direkt im richtigen
+Eigentum kopieren, alles als User bauen. Dann ist nie ein nachträgliches
+`chown` nötig.
+
+**Merksatz:** „Es funktioniert" und „es ist richtig gebaut" sind zwei Fragen.
+Das fehlerhafte Dockerfile hätte *funktioniert* – nur mit einem doppelt so
+grossen Image. Doku gezielt prüfen schlägt plausibles Raten; und ein Werkzeug
+ist erst nützlich, wenn man auch seine Grenze kennt.
+
+**Kapitel-Merksatz:** Deployment deckt gnadenlos auf, ob die Trennung von
+Code, Konfiguration und Geheimnissen vorher stimmte. War sie sauber (Port aus
+der Umgebung, Key aus `os.environ`, austauschbare Retriever-Schnittstelle),
+ist der Schritt klein. Jede dieser sauberen Trennungen wurde in früheren
+Kapiteln aus einem konkreten Schmerz gelernt – und zahlt hier zusammen aus.
+
+---
+
+*Nächste Kapitel folgen, falls das Projekt weiterwächst.*

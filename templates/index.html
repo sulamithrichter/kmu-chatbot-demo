@@ -14,6 +14,18 @@
       <p class="tagline">Sie führen Ihr Geschäft, wir führen Ihre Zahlen.</p>
     </header>
 
+    <!-- Umschalter: welches Suchverfahren beantwortet die nächste Frage?
+         Wird in chat.js ausgelesen und an /chat mitgeschickt. -->
+    <div class="retriever-switch" role="radiogroup" aria-label="Suchverfahren">
+      <span class="rs-label">Suchverfahren:</span>
+      <label title="Reine Wort-Statistik (TF-IDF). Schnell und transparent, findet aber keine Synonyme.">
+        <input type="radio" name="retriever" value="tfidf" checked> tf-idf
+      </label>
+      <label title="TF-IDF + Embeddings + Reranker. Versteht auch Bedeutung/Synonyme, etwas langsamer.">
+        <input type="radio" name="retriever" value="hybrid"> hybrid
+      </label>
+    </div>
+
     <!-- Nachrichtenbereich. Wird von chat.js befüllt. -->
     <main id="messages" class="messages" aria-live="polite">
       <div class="message bot">

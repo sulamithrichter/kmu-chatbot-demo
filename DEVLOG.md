@@ -396,3 +396,84 @@ versöhnt werden -> Konfiguration *bedingt* statt absolut.
 - [ ] app.py + hybrid_rag.py-Fix ins öffentliche Repo pushen? (lokal gefixt;
       öffentliches Repo gibt fremden Klonen sonst den langsamen Hang-Stand)
 - [ ] Optional: Lib-Import (~40 s kalt) bleibt; bewusst belassen.
+
+---
+
+## Session 12 – 2026-05-18 (Deployment: Live-Demo mit Retriever-Umschalter)
+
+Ziel von Sulamith: öffentliche Live-Demo auf sulamithrichter.ch, auf der man
+pro Frage zwischen `tf-idf` und `hybrid` umschalten und beide testen kann.
+
+### Was gebaut wurde
+- `app.py`: lädt jetzt **beide** Retriever beim Start (`tfidf_index`,
+  `hybrid_index`, Dict `RETRIEVERS`). `/chat` liest `retriever` aus dem
+  Request, wählt pro Anfrage; `hybrid` nicht geladen -> ehrlicher Fallback
+  auf `tfidf`. Antwort-JSON um `retriever` ergänzt. Neuer Schalter
+  `ENABLE_HYBRID=0` für schnelles lokales tfidf-Arbeiten.
+- `app.run(host="0.0.0.0", port=PORT, debug=False, use_reloader=False)` –
+  Cloud-Erreichbarkeit + Produktionssicherheit.
+- Frontend: Umschalter (`index.html`), Auswahl mitschicken + Modus-Label
+  „via … · live/offline" (`chat.js`), Stil dazu (`style.css`).
+- `Dockerfile` + `.dockerignore`: baut die Demo als Hugging-Face-Docker-Space,
+  **backt beide Modelle im Build ins Image**.
+- `DEPLOY.md` (Hugging-Face-Schritte), `README.md` (HF-YAML-Frontmatter +
+  Live-Demo/Tech-Stack/Struktur aktualisiert), `LERNNOTIZEN.md` Kap. 10.
+
+### Entscheidungen & Begründungen
+- **Hugging Face statt Render (Plattform geändert):** Renders Gratis-Tier hat
+  512 MB RAM – PyTorch + 2 Modelle passen nicht. HF-Spaces-Gratis-CPU hat
+  16 GB und ist für ML-Demos gebaut. Render-Limit wird zur *dokumentierten*
+  Begründung (Kap. 10), nicht zur Betriebslast.
+- **Ein Prozess mit beiden Retrievern statt Split (Render+HF):** spart 2.
+  Deployment, CORS, 2. Secret, 2. Debug-Ort. Möglich, weil 16 GB RAM reichen
+  und `HybridRetriever` den `RAGIndex` ohnehin enthält.
+- **Modelle ins Image backen:** eliminiert den Hybrid-Kaltstart-Download
+  (Kap. 9.1). Die cache-abhängige Offline-Logik (Kap. 9.1b) erkennt sie
+  automatisch -> ohne Codeänderung.
+- **`requirements.txt` bleibt schlank:** Hybrid-Pakete zieht das Dockerfile
+  aus dem bestehenden `requirements-hybrid.txt`. Dokumentierte Absicht des
+  schlanken Files bleibt intakt.
+- **Ein Repo, kein zweites:** DEVLOG/LERNNOTIZEN sind das Herz – zwei Repos
+  würden die Doku spalten. Repo bleibt public/klonbar (Dockerfile stört
+  `python app.py` lokal nicht).
+- **`python app.py` behalten:** passt zum schlanken, erklärbaren Stil; die
+  Dev-Server-Grenze wird in Kap. 10 ehrlich benannt statt versteckt.
+
+### Lernmomente / Stolpersteine
+- **`0.0.0.0` vs `127.0.0.1`:** `app.run()` ohne `host` band nur lokal ->
+  kein Cloud-Hoster hätte den Port erreicht. Stiller Show-Stopper, der erst
+  beim Deployment auffällt. Jetzt fix + in Kap. 10 erklärt.
+- Der bestehende `RETRIEVER`-Env-Schalter war exakt die Naht, an der die
+  Ein-Prozess-Doppellösung sauber andockte – gutes Design zahlt sich später
+  aus, ohne dass man es beim Bauen ahnte.
+- Plattformwahl ist eine Ressourcen-Frage, kein Default: „nimm Render"
+  scheiterte an 512 MB; erst die RAM-Rechnung führte zur richtigen Wahl.
+
+### Nachtrag: Verifikation über den Hugging-Face-Connector
+Sulamith hat den HF-Connector (MCP) hinzugefügt mit dem Auftrag, „dort alles
+zu regeln". Befund + ehrliche Grenze:
+- **Der Connector kann NICHT deployen.** Seine Tools sind read/discovery
+  (whoami, repo/space-Suche, Doku, bestehende Spaces *aufrufen*). Es gibt
+  kein Tool zum Space-Anlegen, Datei-Pushen oder Secret-Setzen. Diese
+  Schritte bleiben bei Sulamith (git push mit HF-Token / Web-UI, `DEPLOY.md`).
+- **Genutzt, um zu verifizieren statt zu raten:**
+  - `hf_whoami`: authentifiziert als „Sulamith" ✓
+  - Beide Modell-IDs aus dem Dockerfile auf dem Hub geprüft – existieren,
+    `sentence-transformers`, je ~118M Parameter. Build scheitert nicht an
+    Tippfehlern in den IDs.
+  - HF-Docker-Spaces-Doku gefetcht → **Bug im ersten Dockerfile gefunden
+    und behoben**: ich hatte als root gebaut und am Ende `chown -R /app`
+    gemacht. HF-Doku warnt ausdrücklich: rekursives `chown` dupliziert ALLE
+    (hier: GB-grossen Modell-)Dateien in eine neue Layer → ~doppeltes Image.
+    Korrekt ist das offizielle Muster: User (UID 1000) FRÜH anlegen, früh
+    `USER` wechseln, `COPY --chown=user`, alles als User bauen.
+- **Secret bewusst NICHT übernommen:** Den `ANTHROPIC_API_KEY` setzt nur
+  Sulamith im Space (Kap. 4: ein Secret nie in den Chat/an Dritte geben –
+  genau die Regel, die dieses Projekt lehrt; sie gilt auch für mich).
+
+### Offene Punkte
+- [ ] Sulamith: HF-Space anlegen, Code pushen, `ANTHROPIC_API_KEY` als
+      Space-Secret setzen (Schritte in `DEPLOY.md`)
+- [ ] Nach erstem Build: beide Modi im Browser testen, Modus-Label prüfen
+- [ ] Demo auf sulamithrichter.ch einbetten/verlinken
+- [ ] Optional: eigene Subdomain (demo.sulamithrichter.ch) statt hf.space-URL

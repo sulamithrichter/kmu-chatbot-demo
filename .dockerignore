@@ -1,0 +1,15 @@
+# Was NICHT ins Docker-Image gehört.
+# .env hier zusätzlich ausschliessen (Defense-in-Depth): das Secret kommt
+# aus den Hugging-Face-Space-Settings, NIEMALS aus dem Image.
+
+.git
+.gitignore
+.venv
+venv
+env
+__pycache__
+*.py[cod]
+.env
+.DS_Store
+.vscode
+.idea

@@ -1,9 +1,29 @@
+---
+title: KMU-Chatbot Demo
+emoji: 💬
+colorFrom: blue
+colorTo: gray
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
+<!-- Der YAML-Block oben konfiguriert den Hugging-Face-Space (SDK Docker,
+     Port 7860). GitHub rendert ihn nicht – der Rest dieser Datei ist die
+     normale Projekt-README. Details: DEPLOY.md / LERNNOTIZEN Kap. 10. -->
+
 # KMU-Chatbot – „Soll & Haben Treuhand Basel"
 
 Ein RAG-basierter Firmen-Chatbot: Kundinnen und Kunden stellen auf der Website
 Fragen, der Bot antwortet **ausschliesslich aus den Firmendokumenten** (Preise,
 Dienstleistungen, FAQ, Kontakt). Kein erfundenes Wissen, ehrliche „weiss ich
 nicht"-Antworten.
+
+**Live-Demo:** auf Hugging Face Spaces deployt (ein Docker-Container lädt
+**beide** Retriever). Im Chat lässt sich pro Frage zwischen **`tf-idf`** und
+**`hybrid`** umschalten – so kann man beide Verfahren direkt vergleichen.
+Einbettung/Verlinkung auf [sulamithrichter.ch](https://sulamithrichter.ch).
+Deployment-Schritte: siehe `DEPLOY.md`.
 
 > **Hinweis:** „Soll & Haben Treuhand Basel" ist eine **fiktive Firma**.
 > Adresse, Kontaktdaten und Personen sind erfunden. Dies ist ein Demo- und
@@ -31,10 +51,15 @@ Bewusst **ohne** externe Vektordatenbank, ohne LangChain, ohne Embedding-
 Dienst – die Retrieval-Logik ist selbst gebaut und vollständig nachvollziehbar
 (siehe `LERNNOTIZEN.md`).
 
+Im Frontend wählt ein Umschalter pro Frage das Retrieval-Verfahren
+(`tfidf` | `hybrid`); ist `hybrid` nicht geladen, fällt die App ehrlich
+gekennzeichnet auf `tfidf` zurück.
+
 ## Tech-Stack
 
 Python · Flask · Anthropic Claude API (`claude-haiku-4-5`) · Vanilla
-HTML/CSS/JS · TF-IDF/Cosine Similarity in reinem Python
+HTML/CSS/JS · TF-IDF/Cosine Similarity in reinem Python · Hybrid: lokale
+Embeddings + Cross-Encoder-Reranker · Deployment: Docker / Hugging Face Spaces
 
 ## Setup
 
@@ -66,6 +91,9 @@ documents/              Firmendokumente (Wissensbasis des Bots)
 templates/index.html    Chat-Oberfläche
 static/                 style.css, chat.js
 experiment_embeddings.py  Vergleich TF-IDF vs. Embeddings (optional, Lernzweck)
+Dockerfile              Baut den Live-Demo-Container (backt die Modelle ein)
+.dockerignore           Hält .git/.venv/.env aus dem Image
+DEPLOY.md               Deployment-Schritte (Hugging Face Spaces)
 DEVLOG.md               Entwicklungstagebuch (Entscheidungen, Stolpersteine)
 LERNNOTIZEN.md          Konzept-Vertiefung & Trade-off-Analysen
 ```
@@ -103,10 +131,15 @@ Minuten (Meldung „Lade Hybrid-Modelle…", **nicht abbrechen**). Ab dem
 zweiten Start erkennt die App die gecachten Modelle automatisch, arbeitet
 offline und startet in **wenigen Sekunden**.
 
-Ohne `RETRIEVER=hybrid` läuft der schlanke TF-IDF-Standard (keine schweren
-Abhängigkeiten, sofort startklar). Fehlen die Hybrid-Pakete, fällt die App
-automatisch auf TF-IDF zurück. Konzept & Messungen: `LERNNOTIZEN.md` Kap. 8;
-Debugging-Lektion (HF-Hub-Hang) Kap. 9.
+Fehlen die Hybrid-Pakete, fällt die App automatisch auf TF-IDF zurück. Für
+schnelles lokales TF-IDF-Arbeiten ohne den schweren Modell-Ladevorgang:
+`ENABLE_HYBRID=0 ./.venv/bin/python app.py`. Konzept & Messungen:
+`LERNNOTIZEN.md` Kap. 8; Debugging-Lektion (HF-Hub-Hang) Kap. 9.
+
+In der **Live-Demo** lädt ein einzelner Container beide Retriever gleichzeitig
+(genug RAM auf Hugging Face Spaces); der Umschalter im Chat wählt pro Frage.
+Warum Hugging Face statt eines 512-MB-Gratis-Tiers, und wie das Deployment
+funktioniert: `LERNNOTIZEN.md` Kap. 10 und `DEPLOY.md`.
 
 ## Optionales Experiment
 
