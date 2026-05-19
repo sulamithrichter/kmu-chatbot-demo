@@ -153,3 +153,11 @@ body {
   margin-top: 0.25rem;
   padding-left: 0.2rem;
 }
+
+/* Mobil: Chatfenster an die ECHTE sichtbare Höhe anpassen. 88vh rechnet am
+   Handy die ausgeblendete Browserleiste mit -> zu hoch. 100dvh = dynamische
+   Viewport-Höhe (berücksichtigt die Leiste) minus schmaler Rand. */
+@media (max-width: 640px) {
+  body { padding: 0.5rem; }
+  .chat-container { height: calc(100dvh - 1rem); }
+}
