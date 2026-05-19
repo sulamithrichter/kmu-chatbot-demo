@@ -471,9 +471,82 @@ zu regeln". Befund + ehrliche Grenze:
   Sulamith im Space (Kap. 4: ein Secret nie in den Chat/an Dritte geben –
   genau die Regel, die dieses Projekt lehrt; sie gilt auch für mich).
 
+### Durchgeführt & verifiziert (2026-05-18)
+- Lokal committet (`91a9516`), Space `Sulamith/kmu-chatbot-demo` (SDK
+  docker) angelegt, per `git push space main --force` hochgeladen (frischer
+  Space hatte nur HF-Boilerplate -> force unkritisch). Build OK, Status
+  `Running`. Seite verifiziert: Chat-UI + Umschalter live erreichbar unter
+  `https://sulamith-kmu-chatbot-demo.hf.space`.
+- **Stolperstein (lehrreich, behoben):** API-Key wurde von Hand *abgetippt*
+  -> 401 -> Bot lief in beiden Modi offline. Die App ist NICHT abgestürzt,
+  sondern sauber auf den Offline-Fallback zurückgefallen: **Kap. 5 (Graceful
+  Degradation) live in der Praxis bewiesen.** Fix: Key per Copy-Paste neu
+  gesetzt. Zweite typische Falle benannt: ins Secret-*Wert*-Feld gehört nur
+  `sk-ant-…`, nicht `ANTHROPIC_API_KEY=` und keine Anführungszeichen.
+- Danach beide Retriever live verifiziert (Label „· live"), inkl. „Was
+  macht ihr?" über hybrid (die für tf-idf UND Embeddings je allein
+  unlösbare Frage) – Hybrid live nachweislich funktionsfähig.
+
 ### Offene Punkte
-- [ ] Sulamith: HF-Space anlegen, Code pushen, `ANTHROPIC_API_KEY` als
-      Space-Secret setzen (Schritte in `DEPLOY.md`)
-- [ ] Nach erstem Build: beide Modi im Browser testen, Modus-Label prüfen
-- [ ] Demo auf sulamithrichter.ch einbetten/verlinken
+- [x] HF-Space anlegen, Code pushen, `ANTHROPIC_API_KEY` als Secret setzen
+- [x] Beide Modi im Browser getestet, Modus-Label „· live" verifiziert
+- [ ] Demo auf sulamithrichter.ch einbetten/verlinken (nächster Schritt)
 - [ ] Optional: eigene Subdomain (demo.sulamithrichter.ch) statt hf.space-URL
+- [ ] Optional: Doku-Commit (`git push space main`) – Doku-Updates wirken
+      sich nicht auf die laufende Demo aus, nur fürs Repo/Portfolio
+
+---
+
+## Session 13 – 2026-05-19 (GitHub-Veröffentlichung & Konsistenz-Politur)
+
+Ziel: Die vollständige, deployte Version + Doku **kohärent** auf GitHub
+sichtbar machen – so, dass das Repo weiter klonbar/lauffähig bleibt und keine
+veralteten Infos enthält.
+
+### Was gemacht wurde
+- **Portfolio verlinkt die Live-Demo:** `sulamithrichter/portfolio`
+  (`components/Projects.tsx`) – Feld `demo` + `demoNote` (Lade-Hinweis); die
+  Komponente macht daraus automatisch den „Live-Demo ↗"-Knopf. Gepusht.
+- **README-Audit:** zwei durch das Deployment veraltete Stellen korrigiert
+  (Hybrid-Anleitung `RETRIEVER=hybrid` → Umschalter-Logik; „Frischer Klon"-
+  Hinweis ergänzt, der die erwarteten Start-Meldungen ehrlich erklärt).
+- **Kommentar-Politur (kein Logik-Eingriff):** 5 veraltete/inkonsistente
+  Kommentare gefixt – app.py-Docstring (`{message, retriever}`), RETRIEVER-
+  Kommentar, client-Kommentar (Offline-Fallback statt „noch nicht
+  verbunden"), `startseite()` (raus mit „Schritt 4"-Dev-Notiz),
+  hybrid_rag.py-Docstring („app.py lädt beide" statt „schaltet per
+  RETRIEVER").
+- **Frischer-Klon erneut verifiziert:** venv nur mit `requirements.txt` +
+  `python app.py` → tfidf läuft, Hybrid scheitert sauber in *einer*
+  Info-Zeile (kein Crash/Traceback), `/chat` + hybrid→tfidf-Fallback ok.
+
+### Entscheidungen & Begründungen
+- **Voller, kohärenter Push (Code + Doku zusammen) statt nur Doku:** Git
+  pusht Commit-Ketten, nicht einzelne Dateien – `91a9516` (Code/Dockerfile/
+  DEPLOY.md) lag nur auf HF, nie auf GitHub. Nur die Doku zu pushen ginge
+  technisch nicht und würde ein widersprüchliches Repo erzeugen (Doku
+  beschreibt Code, der fehlt). „Eine kohärente Quelle" (Session 12) wird
+  damit konsequent umgesetzt.
+- **Nur Kommentare, keine Logik geändert:** Vorgabe „Code soll gleich
+  bleiben" eingehalten; Verhalten bit-identisch, nur Korrektheit der Doku
+  im Code.
+
+### Lernmomente / Stolpersteine
+- **Commit-Identität ≠ Push-Authentifizierung.** Commit-Autor war korrekt
+  („Sulamith Richter"), aber `git push` scheiterte mit `403 denied to
+  Sulamith-08`: Git war über den Windows-Credential-Manager als *zweites*
+  GitHub-Konto angemeldet, das keinen Schreibzugriff auf `sulamithrichter/…`
+  hat. Fix: gespeicherten github.com-Eintrag entfernen, als richtiges Konto
+  neu authentifizieren. Lehre: Bei `403` zuerst prüfen *als wer* gepusht
+  wird, nicht den Code verdächtigen.
+- **`git add .` ist gefährlich.** Ein lokaler `npm install` hatte
+  `package-lock.json` umgeschrieben (npm-Versions-Churn); `git add .` zog
+  das ungewollt in den Commit (84 Zeilen Lockfile-Müll). Vor dem Push
+  erkannt, mit `git reset --soft HEAD~1` + `git restore package-lock.json`
+  sauber entfernt, nur `Projects.tsx` neu committet. Lehre: gezielt
+  `git add <datei>` und den Commit *vor* dem Push gegenlesen.
+
+### Offene Punkte
+- [ ] `git push origin main` (dieser Schritt) – bringt `91a9516` + Politur-
+      Commit auf GitHub; Repo dann vollständig & kohärent
+- [ ] Optional: eigene Subdomain (demo.sulamithrichter.ch)

@@ -2,8 +2,9 @@
 app.py – Flask-Backend für den KMU-Chatbot "Soll & Haben Treuhand Basel".
 
 Ablauf einer Anfrage:
-  Browser -> POST /chat {message} -> RAG (rag.py) holt Top-Chunks
-  -> Prompt bauen -> Anthropic Claude antwortet -> JSON zurück an den Browser.
+  Browser -> POST /chat {message, retriever} -> gewählter Retriever
+  (tfidf=rag.py ODER hybrid=hybrid_rag.py) holt Top-Chunks -> Prompt bauen
+  -> Anthropic Claude antwortet -> JSON zurück an den Browser.
 
 Der API-Key wird NICHT im Code gespeichert, sondern aus der .env-Datei geladen
 (siehe .env.example). Konzept-Details stehen in LERNNOTIZEN.md, Kapitel 3.
@@ -45,9 +46,10 @@ TOP_K = 3                 # so viele Chunks gehen als Kontext an Claude
 # AirPlay-Empfänger ("ControlCenter") Port 5000 -> Flask kann nicht binden.
 PORT = int(os.environ.get("PORT", "5001"))
 
-# Retriever-Wahl: "tfidf" (Standard, reines rag.py – keine schweren Deps)
-# oder "hybrid" (rag.py-TF-IDF + Embeddings + RRF + Reranker, lokal).
-# Setzen z.B.: RETRIEVER=hybrid ./.venv/bin/python app.py
+# Standard-Retriever, falls eine /chat-Anfrage KEINEN mitschickt: "tfidf"
+# (reines rag.py) oder "hybrid". Beide werden unten geladen; der Umschalter
+# im Frontend wählt pro Anfrage. RETRIEVER setzt also nur den Default –
+# den schweren Hybrid-Arm ganz abschalten: ENABLE_HYBRID=0.
 RETRIEVER = os.environ.get("RETRIEVER", "tfidf").lower()
 
 # Der System-Prompt = das Verhalten des Bots. Die wichtigste Regel ist die
@@ -103,8 +105,8 @@ RETRIEVERS = {"tfidf": tfidf_index, "hybrid": hybrid_index}
 
 # Key aus der Umgebung holen. Fehlt er, bauen wir den Client NICHT (er würde
 # sonst beim Start eine Exception werfen). Stattdessen läuft der Server weiter
-# und /chat meldet freundlich, dass der Live-Teil noch nicht verbunden ist.
-# So lässt sich die ganze Verkabelung (RAG + Prompt) ohne Key testen.
+# und /chat antwortet im Offline-Modus direkt aus den Dokumenten (Graceful
+# Degradation, LERNNOTIZEN Kap. 5). So testet man die Verkabelung ohne Key.
 API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 client = Anthropic(api_key=API_KEY) if API_KEY else None
 
@@ -160,14 +162,14 @@ def antwort_aus_chunks(treffer):
 
 @app.route("/")
 def startseite():
-    # Liefert das Chat-Frontend. templates/index.html entsteht in Schritt 4 –
-    # bis dahin ein freundlicher Hinweis statt eines 500-Tracebacks.
+    # Liefert das Chat-Frontend. Sollte templates/index.html ausnahmsweise
+    # fehlen, lieber ein freundlicher Hinweis statt eines 500-Tracebacks.
     try:
         return render_template("index.html")
     except TemplateNotFound:
         return (
-            "Backend läuft. Das Chat-Frontend (templates/index.html) "
-            "wird in Schritt 4 gebaut. Der /chat-Endpoint funktioniert bereits.",
+            "Backend läuft, aber templates/index.html fehlt. "
+            "Der /chat-Endpoint funktioniert unabhängig davon.",
             200,
         )
 

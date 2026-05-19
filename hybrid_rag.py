@@ -15,9 +15,10 @@ verlässt den Rechner für die Suche. (Nur der spätere LLM-Aufruf in app.py
 geht an die Anthropic-API – das ist der einzige externe Schritt.)
 
 `rag.py` (reines TF-IDF) bleibt unverändert und weiter nutzbar; app.py
-schaltet per RETRIEVER zwischen "tfidf" und "hybrid". Fehlt eine schwere
-Abhängigkeit (sentence-transformers), faellt app.py sauber auf TF-IDF
-zurueck. Schwere Abhängigkeiten: siehe requirements-hybrid.txt.
+lädt BEIDE Retriever und wählt pro Anfrage per Frontend-Umschalter
+(RETRIEVER setzt nur den Default). Fehlt eine schwere Abhängigkeit
+(sentence-transformers), fällt app.py sauber auf TF-IDF zurück. Schwere
+Abhängigkeiten: siehe requirements-hybrid.txt.
 """
 
 import os

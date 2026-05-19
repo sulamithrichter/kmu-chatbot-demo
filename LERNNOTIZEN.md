@@ -679,6 +679,15 @@ gibt es keine `.env` aus deinem Ordner – also:
 - Ohne Key startet die Demo trotzdem und läuft im Offline-Modus – dieselbe
   Graceful Degradation wie lokal (Kap. 5), jetzt auch in der Cloud nützlich.
 
+**Praxisbefund (real beim ersten Deployment):** Der Key wurde von Hand
+abgetippt → ein falsches Zeichen → 401. Die Demo stürzte **nicht** ab,
+sondern lief in beiden Modi sauber im Offline-Fallback weiter; das Label
+„· offline" machte den Fehler sofort sichtbar. Damit hat sich Kap. 5
+(Graceful Degradation) und Kap. 9.2 (ehrliche Kennzeichnung) **unter echten
+Bedingungen bestätigt** – nicht im Selbsttest, sondern beim echten Cloud-
+Start. Lehre nebenbei: Secrets **kopieren, nie tippen**; ins Wert-Feld nur
+`sk-ant-…`, nicht `NAME=` und keine Anführungszeichen.
+
 **Merksatz:** „Secret nicht in den Code" ist plattformunabhängig; nur der
 *Ort* des Secrets ändert sich. Gute Trennung lokal macht den Cloud-Schritt
 zur Einzeiler-Konfiguration.
@@ -764,6 +773,41 @@ Eigentum kopieren, alles als User bauen. Dann ist nie ein nachträgliches
 Das fehlerhafte Dockerfile hätte *funktioniert* – nur mit einem doppelt so
 grossen Image. Doku gezielt prüfen schlägt plausibles Raten; und ein Werkzeug
 ist erst nützlich, wenn man auch seine Grenze kennt.
+
+## 10.13 Git beim Veröffentlichen: drei Lektionen aus der Praxis
+
+Beim Schritt „die deployte Version auch auf GitHub sichtbar machen" traten
+drei lehrreiche Git-Punkte auf:
+
+### Commit-Identität ≠ Authentifizierung
+Ein Commit hat einen **Autor** (Name/E-Mail, frei eingetragen, nur
+Beschriftung). Ob du *pushen* darfst, entscheidet etwas ganz anderes: die
+**Authentifizierung** gegenüber dem Server (hier: ein im Windows-Credential-
+Manager gespeichertes GitHub-Konto). Hier war der Autor korrekt, aber Git
+war als ein *zweites* GitHub-Konto angemeldet, das keinen Schreibzugriff auf
+das Repo hatte → `403`. **Merksatz:** „Wer steht im Commit" und „wer darf
+pushen" sind zwei verschiedene Fragen – bei `403` nicht den Code, sondern die
+Anmeldung prüfen.
+
+### Git pusht Commit-Ketten, nicht Dateien
+Man kann nicht „nur die zwei Doku-Dateien" hochladen. Ein Branch ist eine
+**Kette von Commits**; ein Push überträgt alle Commits, die das Ziel noch
+nicht hat. Die Doku-Änderungen sassen auf dem Deployment-Commit, der auf
+GitHub fehlte → die Doku ist *nur zusammen mit ihm* veröffentlichbar. Das ist
+nicht nur technisch so, sondern auch inhaltlich richtig: Doku, die einen
+Dockerfile und einen Umschalter beschreibt, die im Repo fehlen, wäre
+wertlos. **Merksatz:** Versionsstände sind Pakete, keine losen Zettel –
+veröffentliche den kohärenten Stand, nicht Fragmente.
+
+### `git add .` ist ein stumpfes Werkzeug
+`git add .` nimmt *alles* Geänderte – auch Dinge, die man nicht meinte (hier:
+ein von einem lokalen `npm install` umgeschriebenes `package-lock.json`).
+Das fiel zum Glück vor dem Push auf und liess sich mit `git reset --soft`
+(Commit zurücknehmen, Änderungen behalten) + `git restore` (eine Datei auf
+den sauberen Stand zurücksetzen) chirurgisch entfernen. **Merksatz:**
+Gezielt `git add <datei>` statt `git add .`, und den Commit *vor* dem Push
+gegenlesen – `git reset --soft`/`git restore` sind das Sicherheitsnetz,
+nicht die Ausrede.
 
 **Kapitel-Merksatz:** Deployment deckt gnadenlos auf, ob die Trennung von
 Code, Konfiguration und Geheimnissen vorher stimmte. War sie sauber (Port aus

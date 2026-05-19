@@ -81,6 +81,17 @@ cp .env.example .env
 Ohne gültigen Key/Guthaben startet die App trotzdem und läuft im
 **Offline-Modus** (Antworten direkt aus den Dokumenten).
 
+> **Frischer Klon:** `python app.py` läuft sofort mit dem schlanken
+> **tf-idf**-Standard. Da app.py beim Start beide Retriever zu laden
+> *versucht*, erscheinen ohne installierte Hybrid-Pakete beim Start ein paar
+> Hybrid-Zeilen, zuletzt:
+> `[Retriever] hybrid nicht verfügbar -> nur tfidf: No module named
+> 'sentence_transformers'`. Das ist **erwartet, kein Fehler** (kein Crash,
+> kein Traceback) – die Hybrid-Pakete sind bewusst nicht in
+> `requirements.txt`. Die App läuft normal mit tf-idf weiter. Für einen ganz
+> ruhigen Start ohne diese Zeilen: `ENABLE_HYBRID=0 ./.venv/bin/python
+> app.py`. Hybrid wirklich nutzen: siehe Abschnitt „Hybrid-Modus".
+
 ## Projektstruktur
 
 ```
@@ -122,8 +133,14 @@ Fusion + Cross-Encoder-Reranker.** Alle Suchschritte laufen **lokal**
 
 ```bash
 ./.venv/bin/pip install -r requirements-hybrid.txt   # schwer (PyTorch)
-RETRIEVER=hybrid ./.venv/bin/python app.py
+./.venv/bin/python app.py        # lädt BEIDE Retriever
 ```
+
+app.py lädt beim Start **beide** Retriever; der **Umschalter im Chat** wählt
+dann pro Frage `tf-idf` oder `hybrid`. `RETRIEVER=hybrid` ist nicht mehr nötig,
+um Hybrid zu *nutzen* (das macht der Umschalter) – die Variable setzt nur noch
+den **Standard**, falls eine Anfrage kein Verfahren mitschickt.
+`ENABLE_HYBRID=0` schaltet den schweren Hybrid-Arm ganz ab.
 
 **Erststart:** Beim ersten Mal werden zwei lokale Modelle (~mehrere hundert
 MB) **einmalig** vom Hugging-Face-Hub geladen – je nach Verbindung einige
